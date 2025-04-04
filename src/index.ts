@@ -7,10 +7,13 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+type FocusPanel = 'categories' | 'items' | 'output';
+
 interface CommandItem {
   name: string;
   command?: string;
-  type: 'command' | 'copy';
+  type: 'command' | 'copy' | 'internal';
+  action?: string;
 }
 
 interface Category {
@@ -45,7 +48,7 @@ class CommandRunner {
   private categories: Category[];
   private currentCategoryIndex: number = 0;
   private currentItemIndex: number = 0;
-  private focusedPanel: 'categories' | 'items' | 'output' = 'categories';
+  private focusedPanel: FocusPanel = 'categories';
   private outputHistory: string[] = [];
 
   constructor() {
@@ -191,10 +194,10 @@ class CommandRunner {
     // Handle item selection
     itemsList.on('select', async (item, index) => {
       const selectedItem = this.categories[this.currentCategoryIndex].items[index];
+      
       if (selectedItem.type === 'command' && selectedItem.command) {
         try {
           outputText.log(`$ ${selectedItem.command}`);
-          outputText.log('Running command...');
           this.screen.render();
           
           const { stdout, stderr } = await execAsync(selectedItem.command);
@@ -221,6 +224,12 @@ class CommandRunner {
           }
         }
         this.screen.render();
+      } else if (selectedItem.type === 'internal' && selectedItem.action) {
+        // Handle internal commands for app control
+        if (selectedItem.action === 'clear-output') {
+          outputText.setContent('');
+        }
+        this.screen.render();
       }
     });
 
@@ -238,7 +247,7 @@ class CommandRunner {
     categoriesList.focus();
   }
 
-  private setFocus(panel: 'categories' | 'items' | 'output') {
+  private setFocus(panel: FocusPanel) {
     this.focusedPanel = panel;
     
     // Remove focus from all panels
@@ -271,30 +280,10 @@ class CommandRunner {
     });
 
     this.screen.key('tab', () => {
-      const panels: ('categories' | 'items' | 'output')[] = ['categories', 'items', 'output'];
+      const panels: FocusPanel[] = ['categories', 'items', 'output'];
       const currentIndex = panels.indexOf(this.focusedPanel);
       const nextPanel = panels[(currentIndex + 1) % panels.length];
       this.setFocus(nextPanel);
-    });
-
-    this.screen.key(['up', 'down'], (ch, key) => {
-      if (this.focusedPanel === 'categories' || this.focusedPanel === 'items') {
-        const list = this.focusedPanel === 'categories' ? this.screen.categoriesList : this.screen.itemsList;
-        if (key.name === 'up') {
-          list.up(1);
-        } else {
-          list.down(1);
-        }
-        this.screen.render();
-      } else if (this.focusedPanel === 'output') {
-        // Allow scrolling in the output panel
-        if (key.name === 'up') {
-          this.screen.outputText.scroll(-1);
-        } else {
-          this.screen.outputText.scroll(1);
-        }
-        this.screen.render();
-      }
     });
 
     this.screen.key('enter', () => {
@@ -302,9 +291,6 @@ class CommandRunner {
         const index = this.screen.categoriesList.selected;
         this.screen.categoriesList.emit('select', this.screen.categoriesList.items[index], index);
         this.setFocus('items');
-      } else if (this.focusedPanel === 'items') {
-        const index = this.screen.itemsList.selected;
-        this.screen.itemsList.emit('select', this.screen.itemsList.items[index], index);
       }
     });
   }

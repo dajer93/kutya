@@ -27,6 +27,16 @@
           "type": "copy"
         }
       ]
+    },
+    {
+      "name": "Output control",
+      "items": [
+        {
+          "name": "Clear output",
+          "type": "internal",
+          "action": "clear-output"
+        }
+      ]
     }
   ]
 } 
